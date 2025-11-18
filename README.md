@@ -1,26 +1,132 @@
 # parallel-cdn-log-analyzer ⚡
 
-Analisador paralelo de logs de CDN escrito em **C** com **OpenMP**, focado em comparar versões sequencial e paralelas (usando `critical` e `atomic`) em cenários com milhões de requisições.
+## 🌍 Contexto: por que esse projeto existe?
 
-O projeto simula o comportamento de uma **CDN (Content Delivery Network)**, processando grandes arquivos de log, contando hits por URL com uma **tabela hash** e medindo o impacto da sincronização na performance.
+Hoje, praticamente tudo o que a gente faz na internet passa por uma **CDN (Content Delivery Network)**: assistir séries na **Netflix**, ver vídeos no **YouTube**, jogar online, abrir posts do **Instagram**, carregar páginas de e-commerce como **Amazon** ou **Mercado Livre**, etc.
+
+Essas empresas distribuem cópias dos conteúdos em vários servidores espalhados pelo mundo ("edge servers"). Quando um vídeo, imagem ou página começa a ser muito acessado, ele se torna um **hot content** (conteúdo quente) e precisa ser replicado para mais servidores para evitar:
+
+* sobrecarga em poucos servidores,
+* aumento de latência (site lento),
+* quedas de serviço em horários de pico.
+
+Como a CDN descobre **quais conteúdos estão quentes**? Analisando **logs de acesso**.
+
+Esse projeto simula exatamente essa situação: temos arquivos de log gigantes (com milhões de requisições HTTP), e precisamos:
+
+1. **contar quantos acessos cada URL recebeu**,
+2. fazer isso de forma **rápida**, aproveitando vários núcleos de CPU (paralelismo),
+3. entender como diferentes estratégias de sincronização influenciam o desempenho.
+
+Em vez de trabalhar diretamente com logs reais da Cloudflare, Akamai, Netflix Open Connect ou Google, geramos logs sintéticos, mas com padrões realistas:
+
+* um cenário **distribuído**, em que o tráfego é mais homogêneo;
+* um cenário **concorrente / hotspot**, em que poucas URLs concentram quase todo o tráfego, como quando uma série nova lança na Netflix ou um vídeo viraliza no YouTube.
+
+A partir daí, o foco do projeto é **técnico**: usar C + OpenMP + tabela hash para implementar três versões de analisador de log (sequencial, paralela com `critical` e paralela com `atomic`) e comparar como cada abordagem se comporta nesses cenários.
+
+---
+
+Analisador **paralelo de logs de CDN** escrito em **C** com **OpenMP**, focado em comparar uma versão **sequencial** com duas versões **paralelas** (usando `critical` e `atomic`) em cenários realistas com **10 milhões de requisições**.
+
+Este repositório serve como **portfólio de Computação Paralela + Estruturas de Dados**, mostrando:
+
+* modelagem de um problema real (análise de logs de CDN),
+* implementação de **tabela hash** em C,
+* uso de **OpenMP** para paralelizar um pipeline de processamento de logs,
+* análise de **speedup, eficiência e contenção** em diferentes padrões de acesso.
+
+---
+
+## 🧭 Visão geral rápida
+
+* **Entrada:** arquivos de log HTTP simulando o acesso a uma CDN (10M linhas).
+* **Saída:** arquivo CSV `results.csv` no formato `URL,hit_count` com o total de acessos por URL.
+* **3 implementações comparadas:**
+
+  * `analyzer_seq.c` – versão sequencial (baseline),
+  * `analyzer_par_critical.c` – paralela com `#pragma omp critical`,
+  * `analyzer_par_atomic.c` – paralela com `#pragma omp atomic`.
+* **Cenários de teste:**
+
+  * `log_distribuido.txt` – baixa contenção (acessos bem distribuídos),
+  * `log_concorrente.txt` – alta contenção (hotspots).
+
+---
+
+## 📁 Organização do repositório
+
+Sugestão de layout (pode ser adaptado conforme seu uso):
+
+```text
+parallel-cdn-log-analyzer/
+├── README.md
+├── Makefile                  # script de compilação (gcc + OpenMP)
+├── .gitignore
+├── src/
+│   ├── analyzer_seq.c        # versão sequencial
+│   ├── analyzer_par_critical.c # versão paralela com critical
+│   ├── analyzer_par_atomic.c   # versão paralela com atomic
+│   ├── hash_table.c          # implementação da tabela hash
+│   └── hash_table.h          # interface da tabela hash
+├── scripts/
+│   └── generate_cdn_data.py  # gerador de logs e gabaritos
+├── report/
+│   └── relatorio_lab2_cdn.pdf  # relatório do projeto (opcional)
+└── examples/
+    └── (opcional) arquivos pequenos de exemplo de log/csv
+```
+
+> 🔒 **Não versionar**: arquivos de log reais (`log_*.txt` com ~900MB), gabaritos completos (`gabarito_*.csv` com milhões de linhas), `cdn_data_logs.zip` e executáveis.
+
+Exemplo de `.gitignore` mínimo:
+
+```gitignore
+# Binários
+analyzer_seq
+analyzer_par_critical
+analyzer_par_atomic
+
+# Dados grandes gerados
+*.txt
+*.csv
+*.zip
+
+# Mas permita exemplos pequenos
+!examples/*.txt
+!examples/*.csv
+
+# Objetos e temporários
+*.o
+*.out
+
+# Config de IDEs
+.vscode/
+.idea/
+.DS_Store
+```
 
 ---
 
 ## 🎯 Objetivos do projeto
 
-- Simular o tráfego de uma CDN com:
-  - muitas URLs diferentes (manifesto de conteúdo)
-  - padrões de acesso **distribuídos** e **concorrentes (hotspot)**
-- Implementar uma **estrutura de dados eficiente** para contagem de acessos:
-  - tabela hash com encadeamento separado
-- Comparar desempenho entre três implementações:
-  - versão **sequencial**
-  - versão paralela com **região crítica** (`#pragma omp critical`)
-  - versão paralela com **operações atômicas** (`#pragma omp atomic`)
-- Discutir:
-  - impacto de **contenção** em variáveis compartilhadas
-  - custo de sincronização
-  - ganho real de **speedup** e **eficiência** em função do tamanho da entrada.
+* Simular o tráfego de uma **CDN (Content Delivery Network)** com:
+
+  * catálogo de URLs (`manifest.txt`),
+  * padrões de acesso **distribuídos** e **concorrentes (hotspot)**.
+* Implementar uma **estrutura de dados eficiente** para contagem de acessos:
+
+  * tabela hash com encadeamento separado, escrita em C puro.
+* Comparar desempenho entre três abordagens:
+
+  * versão **sequencial** (1 thread),
+  * versão paralela com **região crítica** (`#pragma omp critical`),
+  * versão paralela com **operações atômicas** (`#pragma omp atomic`).
+* Discutir, na prática:
+
+  * impacto de **contenção** em variáveis compartilhadas,
+  * custo de sincronização vs. ganho de paralelismo,
+  * **speedup** e **eficiência** em função do número de threads e do padrão de acesso.
 
 ---
 
@@ -28,21 +134,22 @@ O projeto simula o comportamento de uma **CDN (Content Delivery Network)**, proc
 
 ### 1. Geração de dados (Python)
 
-**Arquivo:** `generate_cdn_data.py`
+**Arquivo:** `scripts/generate_cdn_data.py`
 
-Esse script cria todo o conjunto de dados sintéticos:
+Este script gera todo o conjunto de dados sintéticos:
 
-- `manifest.txt`  
+* `manifest.txt`
   Lista de todas as URLs disponíveis na CDN (catálogo de conteúdos).
 
-- `log_distribuido.txt`  
-  Log de acessos com **distribuição uniforme** entre as URLs.
+* `log_distribuido.txt`
+  Log de acessos com **distribuição uniforme** entre as URLs (baixa contenção).
 
-- `log_concorrente.txt`  
+* `log_concorrente.txt`
   Log de acessos com **hotspots** (poucas URLs recebem a maior parte dos acessos).
 
-- `gabarito_distribuido.csv`  
-- `gabarito_concorrente.csv`  
+* `gabarito_distribuido.csv`
+
+* `gabarito_concorrente.csv`
 
 Arquivos CSV com o gabarito de contagem no formato:
 
@@ -50,24 +157,15 @@ Arquivos CSV com o gabarito de contagem no formato:
 URL,hit_count
 ```
 
-Esses gabaritos são usados para validar a saída dos analisadores em C via `diff`.
+> Esses gabaritos são usados para validar a saída dos analisadores em C via `diff`.
 
-> 🔎 Observação: o script compacta tudo em `cdn_data_logs.zip` e apaga os arquivos originais.  
-> Para utilizar, basta rodar o script e depois descompactar:
->
-> ```bash
-> python3 generate_cdn_data.py
-> unzip cdn_data_logs.zip
-> ```
+O script também pode compactar tudo em `cdn_data_logs.zip` e remover os arquivos originais.
 
 ---
 
 ### 2. Estrutura de dados: Tabela Hash
 
-**Arquivos:**
-
-- `hash_table.h`
-- `hash_table.c`
+**Arquivos:** `src/hash_table.h`, `src/hash_table.c`
 
 A tabela hash mapeia:
 
@@ -77,202 +175,83 @@ URL -> hit_count
 
 Características principais:
 
-- **Encadeamento separado** para colisões (cada bucket é uma lista encadeada de `CacheNode`).
-- Campos do `CacheNode`:
-  - `char* url` – chave (URL)
-  - `long hit_count` – contador de acessos
-  - `CacheNode* next` – próximo nó na lista encadeada
+* **Encadeamento separado** para colisões (cada bucket é uma lista encadeada de `CacheNode`).
+* Estrutura do `CacheNode`:
+
+  * `char* url` – chave (URL),
+  * `long hit_count` – contador de acessos,
+  * `CacheNode* next` – próximo nó da lista encadeada.
+* Hash de string baseado em `djb2`.
 
 API pública:
 
-- `HashTable* ht_create(size_t size);`
-- `void ht_destroy(HashTable* ht);`
-- `void ht_insert(HashTable* ht, const char* url);`
-- `CacheNode* ht_get(HashTable* ht, const char* url);`
-- `void ht_save_results(HashTable* ht, const char* filename);`
+* `HashTable* ht_create(size_t size);`
+* `void ht_destroy(HashTable* ht);`
+* `void ht_insert(HashTable* ht, const char* url);`
+* `CacheNode* ht_get(HashTable* ht, const char* url);`
+* `void ht_save_results(HashTable* ht, const char* filename);`
 
-A tabela hash é compartilhada entre as versões sequencial e paralelas.
+A mesma tabela hash é reutilizada por todas as versões (sequencial e paralelas), permitindo comparar diretamente o efeito da sincronização.
 
 ---
 
-### 3. Analisadores de log
+### 3. Analisadores de log (C + OpenMP)
 
-Todos os analisadores seguem o mesmo fluxo geral:
+Fluxo geral de todas as versões:
 
 1. Ler `manifest.txt` e inserir todas as URLs na tabela hash com `hit_count = 0`.
-2. Ler todas as linhas do arquivo de log (`log_distribuido.txt` ou `log_concorrente.txt`).
+2. Ler todas as linhas do arquivo de log (`log_distribuido.txt` ou `log_concorrente.txt`) em memória.
 3. Para cada linha de log:
-   - extrair a URL do padrão HTTP:
-     
+
+   * extrair a URL a partir do padrão HTTP:
+
      ```text
-     GET /alguma/url.mp4 HTTP/1.1
+     127.0.0.1 - - [data] "GET /alguma/url.mp4 HTTP/1.1" 200 1500
      ```
-   - buscar essa URL na hash (`ht_get`)
-   - incrementar o contador da URL.
+
+   * buscar essa URL na hash (`ht_get`),
+
+   * incrementar o contador `hit_count` correspondente.
 4. Salvar o resultado em `results.csv`.
-5. Comparar `results.csv` com o gabarito usando `diff`.
+5. Medir o tempo de processamento com `omp_get_wtime()`.
+6. (Opcional) Validar a saída com `diff` em relação ao gabarito.
 
-#### `analyzer_seq.c` – Versão sequencial
+#### `analyzer_seq.c` – Versão sequencial (baseline)
 
-- Processa o log com **1 thread**.
-- Percorre todas as linhas, extrai a URL, faz a busca na tabela hash e incrementa o contador.
-- Usado como **baseline** para cálculo de speedup e eficiência.
+* Processa o log com **1 thread**.
+* Percorre todas as linhas, extrai a URL, busca na hash e incrementa o contador.
+* Serve como **baseline** (`T_seq`) para cálculo de **speedup** e **eficiência**.
 
-#### `analyzer_par_critical.c` – Versão paralela com `critical`
+#### `analyzer_par_critical.c` – Paralelo com `#pragma omp critical`
 
-- Utiliza `#pragma omp parallel for` para dividir as linhas entre múltiplas threads.
-- Cada thread:
-  - extrai a URL da linha de log
-  - busca na hash
-  - incrementa o contador dentro de uma região crítica:
+* Usa `#pragma omp parallel for` para distribuir as linhas entre múltiplas threads.
+* A atualização da contagem é protegida por uma **região crítica global**:
 
 ```c
-#pragma omp critical
-node->hit_count++;
+#pragma omp parallel for
+for (size_t i = 0; i < num; i++) {
+    // extrai URL e busca na hash
+    CacheNode* node = ht_get(ht, url);
+    if (node) {
+        #pragma omp critical
+        node->hit_count++;
+    }
+}
 ```
 
-- Garante correção, mas pode sofrer com **alta contenção**, especialmente no cenário concorrente (hotspot).
+* Garante corretude, mas pode sofrer com **alta contenção** quando muitas threads disputam os mesmos poucos contadores.
 
-#### `analyzer_par_atomic.c` – Versão paralela com `atomic`
+#### `analyzer_par_atomic.c` – Paralelo com `#pragma omp atomic`
 
-- Também usa `#pragma omp parallel for`.
-- O incremento é protegido com uma operação atômica:
+* Também usa `#pragma omp parallel for`.
+* A diferença está na sincronização do incremento, feita com operação atômica:
 
 ```c
-#pragma omp atomic update
-node->hit_count++;
+#pragma omp parallel for
+for (size_t i = 0; i < num; i++) {
+    CacheNode* node = ht_get(ht, url);
+    if (node) {
+        #pragma omp atomic update
+        node->hit_count++;
+
 ```
-
-- A sincronização é mais granular do que `critical`, permitindo melhor escalabilidade quando muitas URLs diferentes são atualizadas em paralelo.
-
----
-
-## 🛠️ Tecnologias utilizadas
-
-- **C** (compilado com `gcc`)
-- **OpenMP**
-  - `#pragma omp parallel for`
-  - `#pragma omp critical`
-  - `#pragma omp atomic`
-- **Python 3** para geração dos dados sintéticos
-- Ambiente de desenvolvimento/teste:
-  - Linux / WSL2
-  - `gcc` com suporte a `-fopenmp`
-
----
-
-## ▶️ Como executar o projeto
-
-### 1. Pré-requisitos
-
-```bash
-sudo apt update
-sudo apt install -y build-essential python3 unzip
-```
-
-### 2. Gerar o conjunto de dados
-
-Na pasta do projeto:
-
-```bash
-python3 generate_cdn_data.py
-unzip cdn_data_logs.zip
-```
-
-Arquivos gerados:
-
-- `manifest.txt`
-- `log_distribuido.txt`
-- `log_concorrente.txt`
-- `gabarito_distribuido.csv`
-- `gabarito_concorrente.csv`
-
-### 3. Compilar os analisadores
-
-```bash
-gcc -Wall -O2 -fopenmp analyzer_seq.c          hash_table.c -o analyzer_seq
-gcc -Wall -O2 -fopenmp analyzer_par_critical.c hash_table.c -o analyzer_par_critical
-gcc -Wall -O2 -fopenmp analyzer_par_atomic.c   hash_table.c -o analyzer_par_atomic
-```
-
-### 4. Rodar e validar (exemplo)
-
-#### Log distribuído
-
-```bash
-# Versão sequencial
-./analyzer_seq log_distribuido.txt
-tr -d '\r' < results.csv > results_seq_distribuido_unix.csv
-tr -d '\r' < gabarito_distribuido.csv > gabarito_distribuido_unix.csv
-diff gabarito_distribuido_unix.csv results_seq_distribuido_unix.csv
-```
-
-```bash
-# Versão paralela com critical (exemplo com 8 threads)
-export OMP_NUM_THREADS=8
-./analyzer_par_critical log_distribuido.txt
-tr -d '\r' < results.csv > results_critical_distribuido_unix.csv
-diff gabarito_distribuido_unix.csv results_critical_distribuido_unix.csv
-```
-
-```bash
-# Versão paralela com atomic (exemplo com 8 threads)
-export OMP_NUM_THREADS=8
-./analyzer_par_atomic log_distribuido.txt
-tr -d '\r' < results.csv > results_atomic_distribuido_unix.csv
-diff gabarito_distribuido_unix.csv results_atomic_distribuido_unix.csv
-```
-
-#### Log concorrente (hotspot)
-
-Repita o mesmo processo usando `log_concorrente.txt` e `gabarito_concorrente.csv`.
-
----
-
-## 📊 Estrutura sugerida para resultados
-
-> Preencha esta seção com os tempos medidos na sua máquina.
-
-### Log distribuído
-
-| Versão             | Threads | Tempo (s) | Speedup | Eficiência |
-|--------------------|---------|-----------|---------|-----------|
-| Sequencial         | 1       |           | 1.00    | 1.00      |
-| Paralelo critical  | 2       |           |         |           |
-| Paralelo critical  | 4       |           |         |           |
-| Paralelo critical  | 8       |           |         |           |
-| Paralelo atomic    | 2       |           |         |           |
-| Paralelo atomic    | 4       |           |         |           |
-| Paralelo atomic    | 8       |           |         |           |
-
-### Log concorrente (hotspot)
-
-| Versão             | Threads | Tempo (s) | Speedup | Eficiência |
-|--------------------|---------|-----------|---------|-----------|
-| Sequencial         | 1       |           | 1.00    | 1.00      |
-| Paralelo critical  | 8       |           |         |           |
-| Paralelo atomic    | 8       |           |         |           |
-
----
-
-## 🧠 Principais aprendizados
-
-- Diferença entre **desempenho teórico** e **desempenho real** em paralelismo:
-  - overhead de criação de threads
-  - custo de sincronização
-  - impacto da hierarquia de memória
-- Efeito do **padrão de acesso aos dados**:
-  - tráfego distribuído tende a escalar melhor
-  - hotspots geram contenção intensa nas mesmas variáveis (URLs quentes)
-- Comparação prática entre `#pragma omp critical` e `#pragma omp atomic` em um cenário realista de processamento de logs.
-- Implementação de **tabela hash** em C e suas implicações em ambiente paralelo.
-
----
-
-## 🚀 Ideias de extensões
-
-- Usar reduções locais por thread e fazer merge dos resultados para diminuir contenção.
-- Adotar partição da tabela hash (por exemplo, uma hash por thread ou por conjunto de buckets).
-- Gerar relatórios automáticos com Top N URLs mais acessadas (direto em C ou via Python).
-- Adicionar métricas extras: tempo de parsing, tempo de IO, tempo de atualização de hash, etc.
-

@@ -54,37 +54,6 @@ Este repositório serve como **portfólio de Computação Paralela + Estruturas 
 
 ---
 
-> 🔒 **Não versionar**: arquivos de log reais (`log_*.txt` com ~900MB), gabaritos completos (`gabarito_*.csv` com milhões de linhas), `cdn_data_logs.zip` e executáveis.
-
-Exemplo de `.gitignore` mínimo:
-
-```gitignore
-# Binários
-analyzer_seq
-analyzer_par_critical
-analyzer_par_atomic
-
-# Dados grandes gerados
-*.txt
-*.csv
-*.zip
-
-# Mas permita exemplos pequenos
-!examples/*.txt
-!examples/*.csv
-
-# Objetos e temporários
-*.o
-*.out
-
-# Config de IDEs
-.vscode/
-.idea/
-.DS_Store
-```
-
----
-
 ## 🎯 Objetivos do projeto
 
 * Simular o tráfego de uma **CDN (Content Delivery Network)** com:

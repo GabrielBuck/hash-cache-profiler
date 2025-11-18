@@ -54,29 +54,6 @@ Este repositório serve como **portfólio de Computação Paralela + Estruturas 
 
 ---
 
-## 📁 Organização do repositório
-
-Sugestão de layout (pode ser adaptado conforme seu uso):
-
-```text
-parallel-cdn-log-analyzer/
-├── README.md
-├── Makefile                  # script de compilação (gcc + OpenMP)
-├── .gitignore
-├── src/
-│   ├── analyzer_seq.c        # versão sequencial
-│   ├── analyzer_par_critical.c # versão paralela com critical
-│   ├── analyzer_par_atomic.c   # versão paralela com atomic
-│   ├── hash_table.c          # implementação da tabela hash
-│   └── hash_table.h          # interface da tabela hash
-├── scripts/
-│   └── generate_cdn_data.py  # gerador de logs e gabaritos
-├── report/
-│   └── relatorio_lab2_cdn.pdf  # relatório do projeto (opcional)
-└── examples/
-    └── (opcional) arquivos pequenos de exemplo de log/csv
-```
-
 > 🔒 **Não versionar**: arquivos de log reais (`log_*.txt` com ~900MB), gabaritos completos (`gabarito_*.csv` com milhões de linhas), `cdn_data_logs.zip` e executáveis.
 
 Exemplo de `.gitignore` mínimo:

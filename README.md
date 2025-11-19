@@ -54,6 +54,60 @@ Este repositório serve como **portfólio de Computação Paralela + Estruturas 
 
 ---
 
+## 📁 Organização do repositório
+
+Sugestão de layout (pode ser adaptado conforme seu uso):
+
+```text
+parallel-cdn-log-analyzer/
+├── README.md
+├── Makefile                  # script de compilação (gcc + OpenMP)
+├── .gitignore
+├── src/
+│   ├── analyzer_seq.c        # versão sequencial
+│   ├── analyzer_par_critical.c # versão paralela com critical
+│   ├── analyzer_par_atomic.c   # versão paralela com atomic
+│   ├── hash_table.c          # implementação da tabela hash
+│   └── hash_table.h          # interface da tabela hash
+├── scripts/
+│   └── generate_cdn_data.py  # gerador de logs e gabaritos
+├── report/
+│   └── relatorio_lab2_cdn.pdf  # relatório do projeto (opcional)
+└── examples/
+    └── (opcional) arquivos pequenos de exemplo de log/csv
+```
+
+> 🔒 **Não versionar**: arquivos de log reais (`log_*.txt` com ~900MB), gabaritos completos (`gabarito_*.csv` com milhões de linhas), `cdn_data_logs.zip` e executáveis.
+
+Exemplo de `.gitignore` mínimo:
+
+```gitignore
+# Binários
+analyzer_seq
+analyzer_par_critical
+analyzer_par_atomic
+
+# Dados grandes gerados
+*.txt
+*.csv
+*.zip
+
+# Mas permita exemplos pequenos
+!examples/*.txt
+!examples/*.csv
+
+# Objetos e temporários
+*.o
+*.out
+
+# Config de IDEs
+.vscode/
+.idea/
+.DS_Store
+```
+
+---
+
 ## 🎯 Objetivos do projeto
 
 * Simular o tráfego de uma **CDN (Content Delivery Network)** com:
@@ -199,5 +253,85 @@ for (size_t i = 0; i < num; i++) {
     if (node) {
         #pragma omp atomic update
         node->hit_count++;
-
+    }
+}
 ```
+
+---
+
+## 📊 Resultados de desempenho (resumo)
+
+Os testes foram feitos com arquivos de log de **10 milhões de linhas** em ambiente Linux/WSL.
+
+### 🔹 Cenário 1 – Log distribuído (baixa contenção)
+
+Tempo sequencial usado como baseline:
+
+* `T_seq_distribuido ≈ 3.82 s`
+
+Comparação das versões paralelas em função do número de threads:
+
+| Threads | Versão   | Tempo (s) | Speedup vs seq |
+| ------: | -------- | --------: | -------------: |
+|       1 | critical |      3.76 |          1.01× |
+|       1 | atomic   |      2.77 |          1.38× |
+|       2 | critical |      2.10 |          1.82× |
+|       2 | atomic   |      1.44 |          2.66× |
+|       4 | critical |      1.57 |          2.43× |
+|       4 | atomic   |      0.90 |          4.25× |
+|       8 | critical |      3.88 |          0.98× |
+|       8 | atomic   |      0.47 |          8.05× |
+
+> Em baixa contenção, a versão com `atomic` consegue aproveitar bem o paralelismo, chegando próximo de **8× de speedup com 8 threads**, enquanto `critical` sofre mais com overhead de sincronização.
+
+### 🔹 Cenário 2 – Log concorrente (alta contenção / hotspot)
+
+Aqui poucas URLs concentram ~90% dos acessos (hot contents).
+
+| Versão                  | Threads | Tempo (s) | Speedup vs seq |
+| ----------------------- | ------: | --------: | -------------: |
+| Sequencial              |       1 |      1.21 |          1.00× |
+| Paralela com `critical` |       8 |      2.98 |          0.40× |
+| Paralela com `atomic`   |       8 |      0.36 |          3.30× |
+
+> Em alta contenção, `critical` vira gargalo (todas as threads disputam uma única região crítica), chegando a ficar **mais lenta que a versão sequencial**.
+> Com `atomic`, a sincronização é mais leve e granular, permitindo um speedup de ~**3.3×** mesmo em um cenário com muitos acessos às mesmas URLs.
+
+---
+
+## 📈 Visualização – Speedup por número de threads
+
+Para o cenário distribuído, também geramos um gráfico de **speedup vs número de threads**:
+
+```text
+Speedup
+ 9 |                            x (atomic, N=8)
+ 8 |                         x
+ 7 |
+ 6 |
+ 5 |                    x
+ 4 |                 x
+ 3 |
+ 2 |           x           x
+ 1 |      x  x
+ 0 +-----------------------------------------
+      N=1    2           4            8
+
+      • linha critical  ~ 1.0, 1.8, 2.4, 1.0
+      • linha atomic    ~ 1.4, 2.7, 4.3, 8.0
+```
+
+Se você quiser incluir o gráfico como imagem no repositório, salve o PNG em `docs/speedup_distribuido.png` e adicione:
+
+```markdown
+![Gráfico de speedup – log distribuído](docs/speedup_distribuido.png)
+```
+
+---
+
+## 🧠 Skills demonstradas
+
+* Programação paralela em **C + OpenMP** (`parallel for`, `critical`, `atomic`).
+* Implementação de **tabela hash** com encadeamento separado para alto volume de dados.
+* Medição e análise de **desempenho**, **speedup**, **eficiência** e **contenção**.
+* Modelagem de um problema real de **CDN / sistemas distribuídos** em um experimento reprodutível.
